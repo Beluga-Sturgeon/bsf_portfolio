@@ -6,6 +6,10 @@
 #include <fstream>
 #include <algorithm>
 #include <cmath>
+#include <string>
+#include <sstream>
+#include <fstream>
+#include <numeric>
 
 #include "../lib/param.hpp"
 #include "../lib/gbm.hpp"
@@ -22,21 +26,24 @@ std::vector<Memory> memory;
 std::vector<double> mean_reward;
 std::vector<double> test;
 std::vector<std::vector<double>> test_action;
+int ntickers;
+int ext;
+std::vector<std::string> tickers;
 
 std::vector<double> sample_state(unsigned int t) {
-    std::vector<double> state(N);
-    for(unsigned int i = 0; i < N; i++)
+    std::vector<double> state(ntickers);
+    for(unsigned int i = 0; i < ntickers; i++)
         state[i] = (path[i][t] - path[i][t-OBS]) / path[i][t-OBS];
     return state;
 }
 
 void write() {
     out.open("./res/path");
-    for(unsigned int i = 0; i < N; i++)
-        out << i << (i != N-1 ? "," : "\n");
-    for(unsigned int t = 0; t <= EXT; t++) {
-        for(unsigned int i = 0; i < N; i++)
-            out << path[i][t] << (i != N-1 ? "," : "\n");
+    for(unsigned int i = 0; i < ntickers; i++)
+        out << tickers[i] << (i != ntickers-1 ? "," : "\n");
+    for(unsigned int t = 0; t <= ext; t++) {
+        for(unsigned int i = 0; i < ntickers; i++)
+            out << path[i][t] << (i != ntickers-1 ? "," : "\n");
     }
     out.close();
 
@@ -53,11 +60,11 @@ void write() {
     out.close();
 
     out.open("./res/action");
-    for(unsigned int i = 0; i < N; i++)
-        out << i << (i != N-1 ? "," : "\n");
-    for(unsigned int t = 0; t < EXT-1; t++) {
-        for(unsigned int i = 0; i < N; i++)
-            out << test_action[i][t] << (i != N-1 ? "," : "\n");
+    for(unsigned int i = 0; i < ntickers; i++)
+        out << tickers[i] << (i != ntickers-1 ? "," : "\n");
+    for(unsigned int t = 0; t < ext-1; t++) {
+        for(unsigned int i = 0; i < ntickers; i++)
+            out << test_action[i][t] << (i != ntickers-1 ? "," : "\n");
     }
     out.close();
 
@@ -73,30 +80,87 @@ void clean() {
     std::vector<std::vector<double>>().swap(test_action);
 }
 
+
+
+void boot(int argc, char* argv[]) {
+    ntickers = argc - 1;
+    
+    std::cout << "ntickers: " << ntickers << ": ";
+
+    std::string openingcmd = "./python/download.py";
+    for (int i = 1; i < argc; ++i) {
+        openingcmd += " " + std::string(argv[i]);
+        tickers.push_back(std::string(argv[i]));
+        std::cout << std::string(argv[i]) << ", ";
+    }
+    std::cout<<"\n";
+
+    std::cout << "downloading.. \n";
+    std::system(openingcmd.c_str());
+    std::cout << "finished  \n";
+    
+
+}
+
+void readfile(std::vector<std::vector<double>> &dat) {
+    std::ifstream file("./data/merge.csv");
+    if (!file.is_open()) {
+        std::cout << "Error opening file\n";
+        return;
+    }
+
+    // Skip the header row
+    std::string header;
+    std::getline(file, header);
+
+    std::string line;
+    while (std::getline(file, line)) {
+        std::vector<double> row;
+        std::istringstream iss(line);
+        std::string value;
+        while (std::getline(iss, value, ',')) {
+            row.push_back(std::stod(value));
+        }
+        dat.push_back(row);
+    }
+
+    std::cout << "transposing data \n";
+    std::vector<std::vector<double>> transposed(dat[0].size(), std::vector<double>(dat.size()));
+    for (size_t i = 0; i < dat.size(); ++i) {
+        for (size_t j = 0; j < dat[i].size(); ++j) {
+            transposed[j][i] = dat[i][j];
+        }
+    }
+    dat = transposed;
+
+    std::cout << "path length: " << dat[0].size() << "\n";
+}
+
 int main(int argc, char *argv[])
 {
+    boot(argc, argv);
+    
+
     std::cout << std::fixed;
-    std::cout.precision(6);
+    std::cout.precision(6);    
 
-    param.resize(N);
-    for(unsigned int i = 0; i < N; i++)
-        param[i] = GBMParam(INITIAL_VALUE, MU, SIGMA);
+    readfile(path);
+    ext = path[0].size();
 
-    path = gbm(param, EXT, seed);
-
+    
     Net actor;
-    actor.add_layer(N+0, N+N);
-    actor.add_layer(N+N, N+N);
-    actor.add_layer(N+N, N+N);
-    actor.add_layer(N+N, N+0);
+    actor.add_layer(ntickers+0, ntickers+ntickers);
+    actor.add_layer(ntickers+ntickers, ntickers+ntickers);
+    actor.add_layer(ntickers+ntickers, ntickers+ntickers);
+    actor.add_layer(ntickers+ntickers, ntickers+0);
     actor.use_softmax();
     actor.init(seed);
 
     Net critic;
-    critic.add_layer(N+N, N+0);
-    critic.add_layer(N+0, N+0);
-    critic.add_layer(N+0, N+0);
-    critic.add_layer(N+0, 1);
+    critic.add_layer(ntickers+ntickers, ntickers+0);
+    critic.add_layer(ntickers+0, ntickers+0);
+    critic.add_layer(ntickers+0, ntickers+0);
+    critic.add_layer(ntickers+0, 1);
     critic.init(seed);
 
     DDPG ddpg(actor, critic);
@@ -105,15 +169,17 @@ int main(int argc, char *argv[])
     for(unsigned int itr = 0; itr < ITR; itr++) {
         unsigned int update_count = 0;
         double reward_sum = 0.00, q_sum = 0.00;
-        for(unsigned int t = OBS; t < EXT; t++) {
+        for(unsigned int t = OBS; t < ext; t++) {
+
             if((itr+1)*t > OBS && eps > EPS_MIN)
                 eps += (EPS_MIN - EPS_INIT) / CAPACITY;
+
             std::vector<double> state = sample_state(t);
             std::vector<double> action = ddpg.epsilon_greedy(state, eps);
             std::vector<double> next_state = sample_state(t+1);
 
             double reward = 0.00;
-            for(unsigned int i = 0; i < N; i++)
+            for(unsigned int i = 0; i < ntickers; i++)
                 reward += path[i][t+1] * action[i];
             reward = log10(reward);
             reward_sum += reward;
@@ -135,21 +201,21 @@ int main(int argc, char *argv[])
             }
         }
 
-        mean_reward.push_back(reward_sum / (EXT-1));
+        mean_reward.push_back(reward_sum / (ext-1));
 
         std::cout << "ITR=" << itr << " ";
         std::cout << "MR=" << mean_reward.back() << " ";
         std::cout << "Q=" << q_sum / update_count << "\n";
     }
 
-    test_action.resize(N, std::vector<double>(EXT-1));
+    test_action.resize(ntickers, std::vector<double>(ext-1));
 
-    for(unsigned int t = OBS; t < EXT; t++) {
+    for(unsigned int t = OBS; t < ext; t++) {
         std::vector<double> state = sample_state(t);
         std::vector<double> action = ddpg.epsilon_greedy(state, 0.00);
 
         double reward = 0.00;
-        for(unsigned int i = 0; i < N; i++) {
+        for(unsigned int i = 0; i < ntickers; i++) {
             reward += path[i][t+1] * action[i];
             test_action[i][t-1] = action[i];
         }
