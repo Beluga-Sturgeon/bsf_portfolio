@@ -15,7 +15,8 @@
 #define BATCH 10
 
 #define GAMMA 0.99
-#define ALPHA 0.000001
+#define ALPHA_INIT 0.000001
+#define K 0.1
 #define LAMBDA 0.10
 #define TAU 0.001
 

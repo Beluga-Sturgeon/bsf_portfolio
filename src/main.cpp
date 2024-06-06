@@ -80,8 +80,6 @@ void clean() {
     std::vector<std::vector<double>>().swap(test_action);
 }
 
-
-
 void boot(int argc, char* argv[]) {
     ntickers = argc - 1;
     
@@ -136,6 +134,8 @@ void readfile(std::vector<std::vector<double>> &dat) {
     std::cout << "path length: " << dat[0].size() << "\n";
 }
 
+double decay(double alpha_init, double t, double size, double itr, double k) {return alpha_init * std::exp(double(t) / (size * itr) * k);}
+
 int main(int argc, char *argv[])
 {
     boot(argc, argv);
@@ -166,6 +166,8 @@ int main(int argc, char *argv[])
     DDPG ddpg(actor, critic);
 
     double eps = EPS_INIT;
+    double alpha = ALPHA_INIT;
+
     for(unsigned int itr = 0; itr < ITR; itr++) {
         unsigned int update_count = 0;
         double reward_sum = 0.00, q_sum = 0.00;
@@ -182,7 +184,7 @@ int main(int argc, char *argv[])
             for(unsigned int i = 0; i < ntickers; i++)
                 reward += path[i][t+1] * action[i];
             reward = log10(reward);
-            reward_sum += reward;
+            reward_sum += reward; 
             
             memory.push_back(Memory(state, action, next_state, reward));
 
@@ -192,8 +194,10 @@ int main(int argc, char *argv[])
                 std::shuffle(index.begin(), index.end(), seed);
                 index.erase(index.begin() + BATCH, index.end());
 
+                alpha = decay(ALPHA_INIT, t, path[0].size(), ITR, K); 
+
                 for(unsigned int &k: index)
-                    q_sum += ddpg.optimize(memory[k], GAMMA, ALPHA, LAMBDA);
+                    q_sum += ddpg.optimize(memory[k], GAMMA, alpha, LAMBDA);
                 update_count += BATCH;
 
                 memory.erase(memory.begin());
