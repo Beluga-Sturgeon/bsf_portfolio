@@ -55,6 +55,13 @@ public:
     double optimize(Memory &memory, double gamma, double alpha, double lambda);
 
     void sync(double tau);
+
+    void build();
+    void test();
+    void run();
+
+    void save(const std::string &path);
+    void load(const std::string &path);
 };
 
 #endif

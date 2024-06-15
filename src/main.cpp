@@ -29,6 +29,8 @@ std::vector<std::vector<double>> test_action;
 int ntickers;
 int ext;
 std::vector<std::string> tickers;
+std::string checkpoint;
+std::string mode;
 
 std::vector<double> sample_state(unsigned int t) {
     std::vector<double> state(ntickers);
@@ -81,18 +83,22 @@ void clean() {
 }
 
 void boot(int argc, char* argv[]) {
-    ntickers = argc - 1;
+    ntickers = argc - 3;
     
+    std::cout << "mode: " << argv[1] << "\n";
     std::cout << "ntickers: " << ntickers << ": ";
 
     std::string openingcmd = "./python/download.py";
-    for (int i = 1; i < argc; ++i) {
+
+    for (int i = 2; i < argc - 1; ++i) {
         openingcmd += " " + std::string(argv[i]);
         tickers.push_back(std::string(argv[i]));
         std::cout << std::string(argv[i]) << ", ";
     }
-    std::cout<<"\n";
 
+    checkpoint = argv[argc - 1];
+
+    std::cout<<"\n";
     std::cout << "downloading.. \n";
     std::system(openingcmd.c_str());
     std::cout << "finished  \n";
@@ -118,6 +124,7 @@ void readfile(std::vector<std::vector<double>> &dat) {
         std::string value;
         while (std::getline(iss, value, ',')) {
             row.push_back(std::stod(value));
+
         }
         dat.push_back(row);
     }
@@ -131,8 +138,8 @@ void readfile(std::vector<std::vector<double>> &dat) {
     }
     dat = transposed;
 
-    std::cout << "path length: " << dat[0].size() << "\n";
-}
+    std::cout << "path length or est: " << dat[0].size() << "\n";
+}  
 
 double decay(double alpha_init, double t, double size, double itr, double k) {return alpha_init * std::exp(double(t) / (size * itr) * k);}
 
@@ -205,6 +212,9 @@ int main(int argc, char *argv[])
             }
         }
 
+        // std::cout << "REWARD SUM " << reward_sum;
+        // std::cout << "ext - 1: " << ext - 1;
+    
         mean_reward.push_back(reward_sum / (ext-1));
 
         std::cout << "ITR=" << itr << " ";
