@@ -1,6 +1,11 @@
 #include <cstdlib>
 #include <vector>
+#include <iostream>
+#include <fstream>
+#include <cstdlib>
 #include <thread>
+#include <algorithm>
+#include "../lib/param.hpp"
 
 #include "../lib/ddpg.hpp"
 
@@ -113,6 +118,7 @@ void DDPG::sync(double tau) {
 
 
 void DDPG::save(const std::string &path) {
+    std::cout << "SAVING TO " << path << "\n";
     std::string actor_path = path + "_actor";
     std::string critic_path = path + "_critic";
     std::string target_actor_path = path + "_target_actor";
@@ -134,4 +140,143 @@ void DDPG::load(const std::string &path) {
     critic->load(critic_path);
     target_actor.load(target_actor_path);
     target_critic.load(target_critic_path);
+}
+
+
+
+
+
+
+void DDPG::write() {
+    std::ofstream out;
+    std::cout << "WRITING" << "\n";
+    out.open("./res/path");
+    for(unsigned int i = 0; i < ntickers; i++)
+        out << tickers[i] << (i != ntickers-1 ? "," : "\n");
+    for(unsigned int t = 0; t <= ext; t++) {
+        for(unsigned int i = 0; i < ntickers; i++)
+            out << path[i][t] << (i != ntickers-1 ? "," : "\n");
+    }
+    out.close();
+
+    out.open("./res/log");
+    out << "mr\n";
+    for(unsigned int i = 0; i < ITR; i++)
+        out << mean_reward[i] << "\n";
+    out.close();
+
+    out.open("./res/test");
+    out << "test\n";
+    for(double &x: test)
+        out << x << "\n";
+    out.close();
+
+    out.open("./res/action");
+    for(unsigned int i = 0; i < ntickers; i++)
+        out << tickers[i] << (i != ntickers-1 ? "," : "\n");
+    for(unsigned int t = 0; t < ext-1; t++) {
+        for(unsigned int i = 0; i < ntickers; i++)
+            out << test_action[i][t] << (i != ntickers-1 ? "," : "\n");
+    }
+    out.close();
+
+    std::system("./python/plot.py");
+}
+
+void DDPG::clean() {
+    std::vector<std::vector<double>>().swap(path);
+    std::vector<Memory>().swap(memory);
+    std::vector<double>().swap(mean_reward);
+    std::vector<double>().swap(test);
+    std::vector<std::vector<double>>().swap(test_action);
+}
+
+
+double decay(double alpha_init, double t, double size, double itr, double k) {return alpha_init * std::exp(double(t) / (size * itr) * k);}
+
+std::vector<double> DDPG::sample_state(unsigned int t) {
+    std::vector<double> state(ntickers);
+    for(unsigned int i = 0; i < ntickers; i++)
+        state[i] = (path[i][t] - path[i][t-OBS]) / path[i][t-OBS];
+    return state;
+}
+
+
+void DDPG::build() {
+    std::default_random_engine seed(std::chrono::system_clock::now().time_since_epoch().count());
+    std::cout << "Building..." << "\n";
+    double eps = EPS_INIT;
+    double alpha = ALPHA_INIT;
+
+    for(unsigned int itr = 0; itr < ITR; itr++) {
+        unsigned int update_count = 0;
+        double reward_sum = 0.00, q_sum = 0.00;
+
+        for(unsigned int t = OBS; t < ext; t++) {
+            if((itr+1)*t > OBS && eps > EPS_MIN)
+                eps += (EPS_MIN - EPS_INIT) / CAPACITY;
+
+            std::vector<double> state = sample_state(t);
+            std::vector<double> action = epsilon_greedy(state, eps);
+            std::vector<double> next_state = sample_state(t+1);
+
+            double reward = 0.00;
+            for(unsigned int i = 0; i < ntickers; i++) {
+                reward += path[i][t+1] * action[i];
+            }
+            reward = log10(reward);
+            reward_sum += reward; 
+
+            memory.push_back(Memory(state, action, next_state, reward));
+
+            if(memory.size() == CAPACITY) {
+                std::vector<unsigned int> index(CAPACITY, 0);
+                std::iota(index.begin(), index.end(), 0);
+                std::shuffle(index.begin(), index.end(), seed);
+                index.erase(index.begin() + BATCH, index.end());
+
+                alpha = decay(ALPHA_INIT, t, path[0].size(), ITR, K); 
+
+                for(unsigned int &k: index)
+                    q_sum += optimize(memory[k], GAMMA, alpha, LAMBDA);
+                update_count += BATCH;
+
+                memory.erase(memory.begin());
+                std::vector<unsigned int>().swap(index);
+            }
+        }
+
+        std::cout << reward_sum << "\n";
+        mean_reward.push_back(reward_sum / (ext-1));
+
+        std::cout << "ITR=" << itr << " ";
+        std::cout << "MR=" << mean_reward.back() << " ";
+        std::cout << "Q=" << q_sum / update_count << "\n";
+    }
+
+    test_action.resize(ntickers, std::vector<double>(ext-1));
+
+    for(unsigned int t = OBS; t < ext; t++) {
+        std::vector<double> state = sample_state(t);
+        std::vector<double> action = epsilon_greedy(state, 0.00);
+
+        double reward = 0.00;
+        for(unsigned int i = 0; i < ntickers; i++) {
+            if (i < path.size() && t + 1 < path[i].size()) {
+                reward += path[i][t+1] * action[i];
+                test_action[i][t-1] = action[i];
+            } else {
+                std::cerr << "Out of bounds access in path\n";
+                std::exit(EXIT_FAILURE);
+            }
+        }
+        test.push_back(reward);
+
+        std::vector<double>().swap(state);
+        std::vector<double>().swap(action);
+    }
+
+    write();
+    clean();
+    save(checkpoint);
 }
