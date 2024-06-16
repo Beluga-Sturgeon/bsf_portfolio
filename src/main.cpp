@@ -145,7 +145,7 @@ void readfile(std::vector<std::vector<double>> &dat) {
 }
 
 double decay(double alpha_init, double t, double size, double itr, double k) {
-    return alpha_init * std::exp(-double(t) / (size * itr) * k);
+    return alpha_init * std::exp(double(t) / (size * itr) * k);
 }
 
 int main(int argc, char *argv[])
