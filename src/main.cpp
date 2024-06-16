@@ -29,6 +29,8 @@ std::vector<std::vector<double>> test_action;
 int ntickers;
 int ext;
 std::vector<std::string> tickers;
+std::string mode;
+std::string checkpoint;
 
 std::vector<double> sample_state(unsigned int t) {
     std::vector<double> state(ntickers);
@@ -81,23 +83,31 @@ void clean() {
 }
 
 void boot(int argc, char* argv[]) {
-    ntickers = argc - 1;
+    if (argc < 3) {
+        std::cerr << "Usage: " << argv[0] << " <mode> <ticker1> <ticker2> ... <checkpoint>\n";
+        std::exit(EXIT_FAILURE);
+    }
     
+    mode = argv[1];
+    ntickers = argc - 3;
+    
+    std::cout << "mode: " << mode << "\n";
     std::cout << "ntickers: " << ntickers << ": ";
 
     std::string openingcmd = "./python/download.py";
-    for (int i = 1; i < argc; ++i) {
+
+    for (int i = 2; i < argc - 1; ++i) {
         openingcmd += " " + std::string(argv[i]);
         tickers.push_back(std::string(argv[i]));
         std::cout << std::string(argv[i]) << ", ";
     }
-    std::cout<<"\n";
 
+    std::cout << "\n";
+    checkpoint = argv[argc - 1];
+    std::cout << "checkpoint: " << checkpoint << "\n";
     std::cout << "downloading.. \n";
     std::system(openingcmd.c_str());
     std::cout << "finished  \n";
-    
-
 }
 
 void readfile(std::vector<std::vector<double>> &dat) {
@@ -134,15 +144,15 @@ void readfile(std::vector<std::vector<double>> &dat) {
     std::cout << "path length: " << dat[0].size() << "\n";
 }
 
-double decay(double alpha_init, double t, double size, double itr, double k) {return alpha_init * std::exp(double(t) / (size * itr) * k);}
+double decay(double alpha_init, double t, double size, double itr, double k) {
+    return alpha_init * std::exp(-double(t) / (size * itr) * k);
+}
 
 int main(int argc, char *argv[])
 {
     boot(argc, argv);
-    
-
     std::cout << std::fixed;
-    std::cout.precision(6);    
+    std::cout.precision(10);  
 
     readfile(path);
     ext = path[0].size();
@@ -209,6 +219,7 @@ int main(int argc, char *argv[])
 
         std::cout << "ITR=" << itr << " ";
         std::cout << "MR=" << mean_reward.back() << " ";
+        std::cout << "ALPHA="<<alpha << " ";
         std::cout << "Q=" << q_sum / update_count << "\n";
     }
 
