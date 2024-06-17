@@ -31,6 +31,7 @@ int ext;
 std::vector<std::string> tickers;
 std::string mode;
 std::string checkpoint;
+int decayt;
 
 std::vector<double> sample_state(unsigned int t) {
     std::vector<double> state(ntickers);
@@ -148,11 +149,15 @@ double decay(double alpha_init, double t, double size, double itr, double k) {
     return alpha_init * std::exp(double(t) / (size * itr) * k);
 }
 
+double jun_decay(double alpha_init, double t, double T, double k) {
+    return alpha_init * std::exp(t * k / T);
+}
+
 int main(int argc, char *argv[])
 {
     boot(argc, argv);
     std::cout << std::fixed;
-    std::cout.precision(10);  
+    std::cout.precision(15);  
 
     readfile(path);
     ext = path[0].size();
@@ -177,6 +182,8 @@ int main(int argc, char *argv[])
 
     double eps = EPS_INIT;
     double alpha = ALPHA_INIT;
+    double k = log10(ALPHA_FINAL) - log10(ALPHA_INIT);
+    decayt = 0;
 
     for(unsigned int itr = 0; itr < ITR; itr++) {
         unsigned int update_count = 0;
@@ -199,12 +206,14 @@ int main(int argc, char *argv[])
             memory.push_back(Memory(state, action, next_state, reward));
 
             if(memory.size() == CAPACITY) {
+                decayt ++;
                 std::vector<unsigned int> index(CAPACITY, 0);
                 std::iota(index.begin(), index.end(), 0);
                 std::shuffle(index.begin(), index.end(), seed);
                 index.erase(index.begin() + BATCH, index.end());
 
-                alpha = decay(ALPHA_INIT, t, path[0].size(), ITR, K); 
+                // alpha = decay(ALPHA_INIT, decayt, path[0].size(), ITR, K); 
+                if (decayt > ext * 10) alpha = jun_decay(ALPHA_INIT, decayt, ext, k);
 
                 for(unsigned int &k: index)
                     q_sum += ddpg.optimize(memory[k], GAMMA, alpha, LAMBDA);
