@@ -212,7 +212,9 @@ int main(int argc, char *argv[])
                 index.erase(index.begin() + BATCH, index.end());
 
                 // alpha = decay(ALPHA_INIT, decayt, path[0].size(), ITR, K); 
-                if (decayt > ext * 10) {decayt ++; alpha = jun_decay(ALPHA_INIT, decayt, ext, k);}
+                decayt ++; 
+                alpha = jun_decay(ALPHA_INIT, decayt, ITR * ext, k);
+
 
                 for(unsigned int &k: index)
                     q_sum += ddpg.optimize(memory[k], GAMMA, alpha, LAMBDA);
@@ -227,7 +229,7 @@ int main(int argc, char *argv[])
 
         std::cout << "ITR=" << itr << " ";
         std::cout << "MR=" << mean_reward.back() << " ";
-        std::cout << "ALPHA="<<alpha << " ";
+        std::cout << "ALPHA="<<alpha << " decayt="<<decayt << " ";
         std::cout << "Q=" << q_sum / update_count << "\n";
     }
 
