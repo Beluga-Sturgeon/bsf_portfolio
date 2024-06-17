@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <vector>
 #include <thread>
+#include <iostream>
 
 #include "../lib/ddpg.hpp"
 
@@ -108,4 +109,30 @@ double DDPG::optimize(Memory &memory, double gamma, double alpha, double lambda)
 void DDPG::sync(double tau) {
     copy(*actor, target_actor, tau);
     copy(*critic, target_critic, tau);
+}
+
+
+void DDPG::save(const std::string &path) {
+    std::cout << "SAVING TO " << path << "\n";
+    std::string actor_path = path + "_actor";
+    std::string critic_path = path + "_critic";
+    std::string target_actor_path = path + "_target_actor";
+    std::string target_critic_path = path + "_target_critic";
+
+    actor->save(actor_path);
+    critic->save(critic_path);
+    target_actor.save(target_actor_path);
+    target_critic.save(target_critic_path);
+}
+
+void DDPG::load(const std::string &path) {
+    std::string actor_path = path + "_actor";
+    std::string critic_path = path + "_critic";
+    std::string target_actor_path = path + "_target_actor";
+    std::string target_critic_path = path + "_target_critic";
+
+    actor->load(actor_path);
+    critic->load(critic_path);
+    target_actor.load(target_actor_path);
+    target_critic.load(target_critic_path);
 }

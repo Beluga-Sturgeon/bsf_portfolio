@@ -206,14 +206,13 @@ int main(int argc, char *argv[])
             memory.push_back(Memory(state, action, next_state, reward));
 
             if(memory.size() == CAPACITY) {
-                decayt ++;
                 std::vector<unsigned int> index(CAPACITY, 0);
                 std::iota(index.begin(), index.end(), 0);
                 std::shuffle(index.begin(), index.end(), seed);
                 index.erase(index.begin() + BATCH, index.end());
 
                 // alpha = decay(ALPHA_INIT, decayt, path[0].size(), ITR, K); 
-                if (decayt > ext * 10) alpha = jun_decay(ALPHA_INIT, decayt, ext, k);
+                if (decayt > ext * 20) {decayt ++; alpha = jun_decay(ALPHA_INIT, decayt, ext, k);}
 
                 for(unsigned int &k: index)
                     q_sum += ddpg.optimize(memory[k], GAMMA, alpha, LAMBDA);
