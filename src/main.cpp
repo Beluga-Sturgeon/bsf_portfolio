@@ -164,18 +164,18 @@ int main(int argc, char *argv[])
 
     
     Net actor;
-    actor.add_layer(ntickers+0, ntickers+ntickers);
-    actor.add_layer(ntickers+ntickers, ntickers+ntickers);
-    actor.add_layer(ntickers+ntickers, ntickers+ntickers);
-    actor.add_layer(ntickers+ntickers, ntickers+0);
+    actor.add_layer(ntickers+0, 50);
+    actor.add_layer(50, 50);
+    actor.add_layer(50, 50);
+    actor.add_layer(50, ntickers+0);
     actor.use_softmax();
     actor.init(seed);
 
     Net critic;
-    critic.add_layer(ntickers+ntickers, ntickers+0);
-    critic.add_layer(ntickers+0, ntickers+0);
-    critic.add_layer(ntickers+0, ntickers+0);
-    critic.add_layer(ntickers+0, 1);
+    critic.add_layer(ntickers+ntickers, 50);
+    critic.add_layer(50, 50);
+    critic.add_layer(50, 50);
+    critic.add_layer(50, 1);
     critic.init(seed);
 
     DDPG ddpg(actor, critic);
